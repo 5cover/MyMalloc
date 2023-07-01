@@ -18,18 +18,27 @@
     <ClCompile Include="main.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="BitmapFactory.c">
+    <ClCompile Include="bitmapFactory.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="MyHeap.c">
+    <ClCompile Include="myHeap.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="commands.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BitmapFactory.h">
+    <ClInclude Include="bitmapFactory.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
-    <ClInclude Include="MyHeap.h">
+    <ClInclude Include="myHeap.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="macros.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="commands.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
   </ItemGroup>

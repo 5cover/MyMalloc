@@ -104,7 +104,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;__STDC_LIB_EXT1__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <DisableSpecificWarnings>6262;5045;4820;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>6262;5045;4820;4774%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <AdditionalOptions>/TC %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -129,13 +129,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="BitmapFactory.c" />
+    <ClCompile Include="bitmapFactory.c" />
+    <ClCompile Include="commands.c" />
     <ClCompile Include="main.c" />
-    <ClCompile Include="MyHeap.c" />
+    <ClCompile Include="myHeap.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BitmapFactory.h" />
-    <ClInclude Include="MyHeap.h" />
+    <ClInclude Include="bitmapFactory.h" />
+    <ClInclude Include="commands.h" />
+    <ClInclude Include="macros.h" />
+    <ClInclude Include="myHeap.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

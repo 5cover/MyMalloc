@@ -1,142 +1,171 @@
-#ifndef __STDC_LIB_EXT1__
-#error f
-#endif
-#define __STDC_WANT_LIB_EXT1__ 1
-
+﻿#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <errno.h>
-#include <stdarg.h>
 
-#include "MyHeap.h"
+#include "commands.h"
+#include "macros.h"
+#include "myHeap.h"
 
 #define CHUNKS_DUMP_FILENAME "heap_chunks_dump.bmp"
 #define DATA_DUMP_FILENAME "heap_data_dump.bmp"
+typedef struct
+{
+    size_t size;
+    void const *address;
+} Allocation;
 
-typedef struct { size_t size; void *address; } Allocation;
-
-bool tryInputInt(long *result);
-long inputInt(void);
 void printAllocations(Allocation const allocations[], size_t allocationCount);
 void removeAt(Allocation array[], size_t *length, size_t index);
 
-long menu(size_t choiceCount, char const *choices[]);
-
-#define MENU(choices) menu(ARRAYSIZE(choices), (choices))
+void *customAlloc(size_t size)
+{
+    void *ptr = myAlloc(size);
+    printf("[Allocated %zu bytes at %p]\n", size, ptr);
+    heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
+    return ptr;
+}
+void customFree(void *ptr)
+{
+    myFree(ptr);
+    printf("[Freed %p]\n", ptr);
+    heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
+}
 
 int main(void)
 {
     Allocation allocations[100] = { 0 };
     size_t allocationCount = 0;
+    Command const commands[] = {
+        (Command) {
+            .name = "alloc",
+            .description = "Allocate an amount of bytes.",
+            .hasArgument = true,
+        },
+        (Command) {
+            .name = "free",
+            .description = "Free the specified allocation.",
+            .hasArgument = true,
+        },
+        (Command) {
+            .name = "list",
+            .description = "Lists all allocations and chunks.",
+            .hasArgument = false,
+        },
+        (Command) {
+            .name = "view",
+            .description = "Opens the system editor for the chunks dump bitmap.",
+            .hasArgument = false,
+        },
+        (Command)
+        {
+            .name = "data",
+            .description = "Opens the system editor for the date dump bitmap.",
+            .hasArgument = false,
+        },
+        (Command)
+        {
+            .name = "help",
+            .description = "Shows this help menu.",
+            .hasArgument = false,
+        }, (Command)
+        {
+            .name = "exit",
+            .description = "Exits the program.",
+            .hasArgument = false,
+        },
+    };
 
-    bool keepGoing = true;
-    while (keepGoing)
+    showCommandMenu(commands, ARRAYLENGTH(commands));
+
+    while (true)
     {
-        printAllocations(allocations, allocationCount);
-        puts("");
-        switch (MENU(((char const *[])
+        long long argument = 0;
+
+        const Command *command = inputCommand(commands, ARRAYLENGTH(commands), &argument);
+
+        if (streq(command->name, "alloc"))
         {
-            "Allocate...",
-            "Free...",
-            "Update data...",
-            "View chunks table",
-            "Open chunks bitmap",
-            "Open raw data bitmap",
-            "Quit",
-        })))
-        {
-        case 0:
-        {
-            if (allocationCount == ARRAYSIZE(allocations))
+            if (allocationCount == ARRAYLENGTH(allocations))
             {
-                printf("Maximum number of allocations (%zu) reached.\n", ARRAYSIZE(allocations));
-                break;
+                printf("Maximum number of allocations (%zu) reached.\n", ARRAYLENGTH(allocations));
+            }
+            else if (argument < 0)
+            {
+                printf("Size ('%lld') must be greater than or equal to 0.\n", argument);
+            }
+            else
+            {
+                size_t size = (size_t)argument;
+
+                Allocation newAllocation = { .address = myAlloc(size), .size = size, };
+
+                printf("Added allocation of size %zu at %p.\n",
+                       newAllocation.size, newAllocation.address);
+
+                allocations[allocationCount++] = newAllocation;
+
+                heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
             }
 
-            puts("Size in bytes (>=0):");
-            long input;
-            while (!tryInputInt(&input) || input < 0);
-            size_t size = (size_t)input;
-
-            Allocation newAllocation = { .address = myAlloc(size), .size = size, };
-
-            printf("Added allocation of size %zu at %p.\n",
-                   newAllocation.size, newAllocation.address);
-
-            allocations[allocationCount++] = newAllocation;
-
-            heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
         }
-        break;
-        case 1:
+        else if (streq(command->name, "free"))
         {
             if (allocationCount == 0)
             {
-                puts("No allocations are defined.");
-                break;
+                printf("No allocations are defined.\n");
+            }
+            else if (argument < 1 || (size_t)argument > allocationCount)
+            {
+                printf("Invalid allocation ID.\n");
+            }
+            else
+            {
+                size_t iRemovedAllocation = (size_t)(argument - 1);
+
+                Allocation removedAllocation = allocations[iRemovedAllocation];
+
+                myFree(removedAllocation.address);
+
+                printf("Freed allocation of size %zu at %p (%zu remaining).\n",
+                       removedAllocation.size, removedAllocation.address, allocationCount - 1);
+
+                removeAt(allocations, &allocationCount, iRemovedAllocation);
+
+                heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
             }
 
-            printf("Allocation # [1;%zu]:\n", allocationCount);
-            long input;
-            while (!tryInputInt(&input) || input <= 0 || input > (long)allocationCount);
-
-            size_t iRemovedAllocation = (size_t)(input - 1);
-            Allocation removedAllocation = allocations[iRemovedAllocation];
-
-            myFree(removedAllocation.address);
-
-            printf("Freed allocation of size %zu at %p (%zu remaining).\n",
-                   removedAllocation.size, removedAllocation.address, allocationCount - 1);
-
-            removeAt(allocations, &allocationCount, iRemovedAllocation);
-
-            heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
         }
-        break;
-        case 2:
+        else if (streq(command->name, "list"))
         {
-            // Update data...
-
-            heapDumpDataBitmap(DATA_DUMP_FILENAME);
-        }
-        break;
-        case 3:
-        {
+            printAllocations(allocations, allocationCount);
+            printf("\n");
             heapDumpChunksConsole();
-            puts("");
         }
-        break;
-        case 4:
+        else if (streq(command->name, "view"))
         {
             heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
             system(CHUNKS_DUMP_FILENAME);
         }
-        break;
-        case 5:
+        else if (streq(command->name, "data"))
         {
             heapDumpDataBitmap(DATA_DUMP_FILENAME);
             system(DATA_DUMP_FILENAME);
         }
-        break;
-        case 6:
+        else if (streq(command->name, "help"))
         {
-            keepGoing = false;
+            showCommandMenu(commands, ARRAYLENGTH(commands));
         }
-        break;
+        else if (streq(command->name, "exit"))
+        {
+            break;
+        }
+        else
+        {
+            assert(false && "Failed to handle command");
         }
     }
 
     return 0;
-}
-
-void removeAt(Allocation array[], size_t *count, size_t index)
-{
-    for (size_t i = index; i < *count - 1; ++i)
-    {
-        array[i] = array[i + 1];
-    }
-    --(*count);
 }
 
 void printAllocations(Allocation const allocations[], size_t allocationCount)
@@ -150,68 +179,15 @@ void printAllocations(Allocation const allocations[], size_t allocationCount)
            allocationCount, "#", "Address", "Size");
     for (size_t i = 0; i < allocationCount; ++i)
     {
-        printf("| %-2zu | %-16p | %-16zu |\n", i + 1, allocations[i].address, allocations[i].size);
+        printf("| %-2zu | %-#16p | %-16zu |\n", i + 1, allocations[i].address, allocations[i].size);
     }
 }
 
-long menu(size_t choiceCount, char const *choices[])
+void removeAt(Allocation array[], size_t *count, size_t index)
 {
-    for (size_t i = 0; i < choiceCount; ++i)
+    for (size_t i = index; i < *count - 1; ++i)
     {
-        printf("\t%zu. %s\n", i + 1, choices[i]);
+        array[i] = array[i + 1];
     }
-
-    long choice = 0;
-    do
-    {
-        printf("> ");
-    } while (!tryInputInt(&choice) || 1 > choice || choice > (long)choiceCount);
-
-    return choice - 1;
+    --(*count);
 }
-
-long inputInt(void)
-{
-    long result = 0;
-    do
-    {
-        printf("> ");
-    } while (!tryInputInt(&result));
-    return result;
-}
-
-// Determines the lengths of a integer litteral.
-#define STR(X) #X
-#define LEN(x) (sizeof(STR(x)) / sizeof(char) - 1)
-
-bool tryInputInt(long *result)
-{
-    char buf[LEN(LONG_MAX)] = { 0 };
-
-    // Yes, the L suffix causes 1 useless character, but that's fine
-
-    if (fgets(buf, LEN(LONG_MAX), stdin) == NULL)
-    {
-        return false;
-    }
-
-    // have some input, convert it to integer:
-    char *endptr;
-    errno = 0;
-    long converted = strtol(buf, &endptr, 0);
-
-    if (errno == ERANGE)
-    {
-        printf("Out of range\n");
-        return false;
-    }
-    if (endptr == buf)
-    {
-        // empty or invalid input
-        return false;
-    }
-
-    *result = converted;
-    return true;
-}
-#undef LEN

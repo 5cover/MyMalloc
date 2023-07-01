@@ -1,7 +1,7 @@
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 
-#include "BitmapFactory.h"
+#include "bitmapFactory.h"
 
 #define FILE_HEADER_SIZE 14
 #define INFO_HEADER_SIZE 40

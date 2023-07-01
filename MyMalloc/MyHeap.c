@@ -4,108 +4,84 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#include "MyHeap.h"
-#include "BitmapFactory.h"
+#include "myHeap.h"
+#include "bitmapFactory.h"
+#include "macros.h"
 
 #define DUMP_BMP_HEIGHT 10
-#define HEAP_SIZE 256
+#define HEAP_SIZE (size_t)256
+#define CHUNKS_LENGTH (HEAP_SIZE / sizeof(void*))
 
-#define NOT_IMPLEMENTED do                            \
-{                                                     \
-    fprintf(stderr, "%s:%d: %s is not implemented\n", \
-            __FILE__, __LINE__, __func__);            \
-    abort();                                          \
-} while(0)
-
-// Design:
-/*
-What are chunks?
-    -> Chunks represent some metadata over our pool of bytes. They indicate which memory is allocated.
-
-Could we use an array of chunks instead?
-Maybe that instead of having an array of bytes and chunk with pointers to elements of this array, we could have a single chunk represent our whole pool at the start.
-
-No "unchunked" memory
-All mem is covered by chunks.
-
-Are size=0 chunks ok?
-*/
-
-typedef enum
-{
-    CHK_FREE,
-    CHK_ALLOCATED,
-} ChunkState;
+#define ALIGN size
 
 typedef struct
 {
     uint8_t *start;
     size_t size;
-    ChunkState state;
 } Chunk;
 
-Chunk splitChunk(Chunk *source, size_t size, ChunkState newChunkState);
+bool rangesOverlap(void const *x1, void const *x2, void const *y1, void const *y2);
+bool isAreaAllocated(uint8_t const *start, size_t size);
+void removeChunkAt(size_t index);
 
 // Array of bytes representing the heap
 static uint8_t gs_pool[HEAP_SIZE];
 
-static size_t gs_chunkCount = 1;
+static size_t gs_chunkCount = 0;
 
-// Array of chunks sorted by start pointer.
-static Chunk gs_chunks[HEAP_SIZE / sizeof(void *)] =
-{
-    {
-        .size = HEAP_SIZE,
-        .state = CHK_FREE,
-        .start = gs_pool,
-    }
-};
+// Array of allocated memory chunks.
+// It's length represents the maximum number of simulatenous allocations.
+static Chunk gs_chunks[CHUNKS_LENGTH];
 
 void *myAlloc(size_t size)
 {
     if (size == 0)
     {
+        // malloc(0) is unspecified behavior
+        // We can either return an unique pointer or NULL.
         return NULL;
     }
-    if (gs_chunkCount == ARRAYSIZE(gs_chunks))
+    if (gs_chunkCount == ARRAYLENGTH(gs_chunks))
     {
-        fprintf(stderr, "Allocation failed: maximum number of allocations (%zu) reached.\n", ARRAYSIZE(gs_chunks));
+        fprintf(stderr, "Allocation failed: maximum number of allocations (%zu) reached.\n", ARRAYLENGTH(gs_chunks));
         return NULL;
     }
 
-    // For each chunk that is free and at least the size desired:
-    // Find the index of smallest one
-    // In c# this could be implemented with a simple .Where().Min()
-    // I hate procedural code. It's hard to read, hard to write, and hard to understand. Errors are hidden and the intent isn't clear.
-    size_t iSmallestSuitable = 0;
-    bool suitableChunkFound = false;
+    uint8_t *alignedStart = gs_pool + (ALIGN - (intptr_t)gs_pool % ALIGN);
 
-    for (size_t i = 0; i < gs_chunkCount; ++i)
+    if (!IN_ARRAY_BOUNDS((intptr_t)alignedStart, HEAP_SIZE))
     {
-        Chunk chunk = gs_chunks[i];
-        if (chunk.state == CHK_FREE
-            && chunk.size >= size
-            && (!suitableChunkFound || chunk.size < gs_chunks[iSmallestSuitable].size))
+        fprintf(stderr, "Allocation failed: heap too small.\n");
+        return NULL;
+    }
+
+    if (gs_chunkCount == 0)
+    {
+        gs_chunks[gs_chunkCount++] = (Chunk)
         {
-            iSmallestSuitable = i;
-            suitableChunkFound = true;
+            .start = alignedStart,
+            .size = size,
+        };
+        return alignedStart;
+    }
+
+    // Complexity:
+    // -> O(HEAP_SIZE / size * gs_chunkCount)
+    // Best: O(1)
+    // Worst: O(n²)
+    for (uint8_t *pByte = alignedStart; pByte < gs_pool + HEAP_SIZE; pByte += ALIGN)
+    {
+        if (!isAreaAllocated(pByte, size))
+        {
+            gs_chunks[gs_chunkCount++] = (Chunk) {
+                .size = size,
+                .start = pByte
+            };
+            return pByte;
         }
     }
 
-    if (!suitableChunkFound)
-    {
-        fprintf(stderr, "Allocation failed: no suitable free chunk found.\n");
-        return NULL;
-    }
-
-    // Split it and return the smaller one.
-    Chunk newChunk = splitChunk(gs_chunks + iSmallestSuitable, size, CHK_ALLOCATED);
-
-    // Add the chunk
-    gs_chunks[gs_chunkCount++] = newChunk;
-
-    // Returns its start address
-    return newChunk.start;
+    return NULL;
 }
 
 void myFree(void const *ptr)
@@ -120,80 +96,101 @@ void myFree(void const *ptr)
 
     for (size_t i = 0; i < gs_chunkCount && !chunkFound; ++i)
     {
-        if (gs_chunks[i].state == CHK_ALLOCATED && gs_chunks[i].start == ptr)
+        if (gs_chunks[i].start == ptr)
         {
             chunkFound = true;
-            gs_chunks[i].state = CHK_FREE;
+            removeChunkAt(i);
         }
     }
 
     if (!chunkFound)
     {
-        fprintf(stderr, "Invalid pointer: %p", ptr);
+        // Freeing an invalid pointer is undefined behavior as per the C standard, so we can do whatever we want here.
+
+        fprintf(stderr, "Tried to free an invalid pointer: %p", ptr);
+        // We could ignore the error, but it's probably unsafe to continue, so fail-fast.
         abort();
     }
 }
 
+// Checks if at least one chunk occupies at least one byte of the specified memory area.
+bool isAreaAllocated(uint8_t const *start, size_t size)
+{
+    foreach(Chunk const, chunk, gs_chunks, gs_chunkCount)
+    {
+        if (rangesOverlap(chunk->start, chunk->start + chunk->size - 1,
+                          start, start + size - 1))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void removeChunkAt(size_t index)
+{
+    for (size_t i = index; i < gs_chunkCount; ++i)
+    {
+        gs_chunks[i] = gs_chunks[i + 1];
+    }
+    --gs_chunkCount;
+}
+
+bool rangesOverlap(void const *x1, void const *x2, void const *y1, void const *y2)
+{
+    assert(x1 <= x2 && y1 <= y2);
+    return x1 <= y2 && y1 <= x2;
+}
+
+
 void heapDumpChunksConsole(void)
 {
     // Print chunk list
-    printf("Chunks (%zu):\n| %-2s | %-16s | %-16s | %-16s |\n",
-           gs_chunkCount, "#", "Start offset", "Size", "State");
+    printf("Chunks (%zu/%zu):\n\n| %-2s | %-16s | %-16s | %-16s |\n",
+           gs_chunkCount, CHUNKS_LENGTH, "#", "Start offset", "Size", "State");
+    size_t totalSize = 0;
     for (size_t i = 0; i < gs_chunkCount; ++i)
     {
         Chunk const chunk = gs_chunks[i];
-        char const *stateRepr = "?";
-        switch (chunk.state)
-        {
-        case CHK_ALLOCATED: stateRepr = "allocated"; break;
-        case CHK_FREE: stateRepr = "free"; break;
-        }
-        printf("| %-2zu | %-16zu | %-16zu | %-16s |\n", i, chunk.start - gs_pool, chunk.size, stateRepr);
+        printf("| %-2zu | %-16zu | %-16zu | %-16s |\n", i, chunk.start - gs_pool, chunk.size, "allocated");
+        totalSize += chunk.size;
     }
+    printf("\n%zu/%zu bytes allocated\n", totalSize, HEAP_SIZE);
 }
 
 void heapDumpChunksBitmap(char const *filename)
 {
-    uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL];
+    uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL] = { 0 };
 
-    for (size_t i = 0; i < gs_chunkCount; ++i)
+    // Draw the whole bar in green
+    for (size_t i = 0; i < HEAP_SIZE; ++i)
     {
-        Chunk const chunk = gs_chunks[i];
-
         for (size_t y = 0; y < DUMP_BMP_HEIGHT; ++y)
         {
-            // Draw sepearetor
-            uint8_t *pxSep = image[y][chunk.start - gs_pool];
-            switch (chunk.state)
-            {
-            case CHK_ALLOCATED:
-                pxSep[I_R] = 128;
-                pxSep[I_G] = 0;
-                pxSep[I_B] = 0;
-                break;
-            case CHK_FREE:
-                pxSep[I_R] = 0;
-                pxSep[I_G] = 128;
-                pxSep[I_B] = 0;
-                break;
-            }
+            uint8_t *px = image[y][i];
+            px[I_R] = 0;
+            px[I_G] = 255;
+            px[I_B] = 0;
+        }
+    }
 
-            for (size_t iByte = 1; iByte < chunk.size; ++iByte)
+    // Draw chunks individually
+    foreach(Chunk const, chunk, gs_chunks, gs_chunkCount)
+    {
+        for (size_t y = 0; y < DUMP_BMP_HEIGHT; ++y)
+        {
+            // Draw sepearator
+            uint8_t *const pxSep = image[y][chunk->start - gs_pool];
+            pxSep[I_R] = 128;
+            pxSep[I_G] = 0;
+            pxSep[I_B] = 0;
+
+            for (size_t i = 1; i < chunk->size; ++i)
             {
-                uint8_t *pxRepr = image[y][chunk.start - gs_pool + iByte];
-                switch (chunk.state)
-                {
-                case CHK_ALLOCATED:
-                    pxRepr[I_R] = 255;
-                    pxRepr[I_G] = 0;
-                    pxRepr[I_B] = 0;
-                    break;
-                case CHK_FREE:
-                    pxRepr[I_R] = 0;
-                    pxRepr[I_G] = 255;
-                    pxRepr[I_B] = 0;
-                    break;
-                }
+                uint8_t *const pxRepr = image[y][chunk->start - gs_pool + i];
+                pxRepr[I_R] = 255;
+                pxRepr[I_G] = 0;
+                pxRepr[I_B] = 0;
             }
         }
     }
@@ -203,11 +200,11 @@ void heapDumpChunksBitmap(char const *filename)
 
 void heapDumpDataBitmap(char const *filename)
 {
-    uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL];
+    uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL] = { 0 };
 
     for (size_t i = 0; i < HEAP_SIZE; ++i)
     {
-        uint8_t byte = gs_pool[i];
+        uint8_t const byte = gs_pool[i];
 
         for (size_t y = 0; y < DUMP_BMP_HEIGHT; ++y)
         {
@@ -218,17 +215,4 @@ void heapDumpDataBitmap(char const *filename)
     }
 
     generateBitmapImage((uint8_t const *)image, DUMP_BMP_HEIGHT, HEAP_SIZE, filename);
-}
-
-Chunk splitChunk(Chunk *source, size_t size, ChunkState newChunkState)
-{
-    assert(size <= source->size);
-
-    source->size -= size;
-
-    return (Chunk)
-    {
-        .start = source->start + source->size,
-        .size = size, .state = newChunkState,
-    };
 }
