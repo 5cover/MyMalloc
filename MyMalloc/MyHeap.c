@@ -49,7 +49,7 @@ void *myAlloc(size_t size)
 
     uint8_t *alignedStart = gs_pool + (ALIGN - (intptr_t)gs_pool % ALIGN);
 
-    if (!IN_ARRAY_BOUNDS((intptr_t)alignedStart, HEAP_SIZE))
+    if (alignedStart > gs_pool + HEAP_SIZE)
     {
         fprintf(stderr, "Allocation failed: heap too small.\n");
         return NULL;

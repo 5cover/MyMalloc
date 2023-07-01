@@ -8,20 +8,34 @@
 #include "macros.h"
 
 typedef struct {
-    bool const namePresent;
-    bool const argumentPresent;
+    char const *name;
+    long long argument;
+    bool hasName;
+    bool hasArgument;
 } CommandParseResult;
 
-Command const *parseCommand(Command const commands[], size_t commandCount, char const *commandName, size_t maxLength);
-void splitCommandNameAndArgument(char *input, char const **commandName, long long **argument);
+typedef struct {
+    Command const *const array;
+    size_t const commandCount;
+    size_t const maxNameLenth;
+} CommandArray;
+
+char *allocateString(size_t length);
+Command const *getCommandFromName(CommandArray commands, char const *commandName);
+Command const *getCommandFromParsedResult(CommandArray commands, CommandParseResult parsedCommand);
+CommandParseResult parseCommand(char *input);
 size_t getMaxNameLength(Command const commands[], size_t commandCount);
 unsigned digitCount(long long n);
-char *allocateString(size_t length);
 
-Command const *inputCommand(Command const commands[], size_t commandCount, long long *argument)
+Command const *inputCommand(Command const commandsArray[], size_t commandCount, long long *argument)
 {
-    size_t const maxNameLength = getMaxNameLength(commands, commandCount);
-    size_t const inputLength = maxNameLength + digitCount(LLONG_MAX);
+    CommandArray const commands = {
+        .commandCount = commandCount,
+        .array = commandsArray,
+        .maxNameLenth = getMaxNameLength(commandsArray, commandCount),
+    };
+
+    size_t const inputLength = commands.maxNameLenth + digitCount(LLONG_MAX);
 
     char *const input = allocateString(inputLength);
 
@@ -29,62 +43,68 @@ Command const *inputCommand(Command const commands[], size_t commandCount, long 
     {
         printf("\n> ");
 
-        if (gets_s(input, inputLength) == NULL)
-        {
-            printf("Invalid input: get_s failed");
-        }
-
-        char *commandName = NULL;
-
-        Command const *command = NULL;
-
-        long long arg;
-        long long *parsedArgument = &arg;
-
-        splitCommandNameAndArgument(input, &commandName, &parsedArgument);
-
-        if (commandName == NULL)
+        if (gets_s(input, inputLength) == NULL) // get_s failed
         {
             continue;
         }
-        else if ((command = parseCommand(commands, commandCount, commandName, maxNameLength)) == NULL)
-        {
-            printf("Unknown command");
-        }
-        else if (command->hasArgument && parsedArgument == NULL)
-        {
-            printf("Argument missing");
-        }
-        else if (!command->hasArgument && parsedArgument != NULL)
-        {
-            printf("No argument was expected");
-        }
-        else
-        {
-            if (command->hasArgument)
-            {
-                *argument = *parsedArgument;
-            }
 
-            customFree(input);
-            return command;
+        CommandParseResult const parsedCommand = parseCommand(input);
+
+        Command const *command = getCommandFromParsedResult(commands, parsedCommand);
+
+        if (command == NULL)
+        {
+            continue;
         }
+
+        if (parsedCommand.hasArgument)
+        {
+            *argument = parsedCommand.argument;
+        }
+
+        customFree(input);
+        return command;
     }
 }
 
-void showCommandMenu(Command const commands[], size_t commandCount)
+void showCommandMenu(Command const commandsArray[], size_t commandCount)
 {
-    foreach(Command const, command, commands, commandCount)
+    foreach(Command const, command, commandsArray, commandCount)
     {
-        printf("%*s %s\n", -(int)getMaxNameLength(commands, commandCount), command->name, command->description);
+        printf("%*s %s\n", -(int)getMaxNameLength(commandsArray, commandCount), command->name, command->description);
     }
 }
 
-Command const *parseCommand(Command const commands[], size_t commandCount, char const *commandName, size_t maxLength)
+Command const *getCommandFromParsedResult(CommandArray commands, CommandParseResult parsedCommand)
 {
-    foreach(Command const, command, commands, commandCount)
+    Command const *command = getCommandFromName(commands, parsedCommand.name);
+
+    if (command == NULL)
     {
-        if (streqn(command->name, commandName, maxLength))
+        printf("Unknown command");
+        return NULL;
+    }
+
+    if (command->hasArgument && !parsedCommand.hasArgument)
+    {
+        printf("Argument missing");
+        return NULL;
+    }
+
+    if (!command->hasArgument && parsedCommand.hasArgument)
+    {
+        printf("No argument was expected");
+        return NULL;
+    }
+
+    return command;
+}
+
+Command const *getCommandFromName(CommandArray commands, char const *commandName)
+{
+    foreach(Command const, command, commands.array, commands.commandCount)
+    {
+        if (streqn(command->name, commandName, commands.maxNameLenth))
         {
             return command;
         }
@@ -92,8 +112,15 @@ Command const *parseCommand(Command const commands[], size_t commandCount, char 
     return NULL;
 }
 
-void splitCommandNameAndArgument(char *input, char const **commandName, long long **argument)
+CommandParseResult parseCommand(char *input)
 {
+    CommandParseResult result = { 
+        .name = NULL,
+        .argument = 0,
+        .hasName = false,
+        .hasArgument = false,
+    };
+
     // If available, set value, otherwise return NULL.
 
     char *context = NULL;
@@ -103,21 +130,18 @@ void splitCommandNameAndArgument(char *input, char const **commandName, long lon
     char *token = strtok_s(input, separators, &context);
     if (token == NULL) // input is empty
     {
-        *commandName = NULL;
-        *argument = NULL;
-        return;
+        return result;
     }
 
-    // Store command name
-    *commandName = token;
+    // Command name is available from here
+    result.name = token;
+    result.hasName = true;
 
     // Get next token (integer)
     token = strtok_s(NULL, separators, &context);
     if (token == NULL)
     {
-        // argument is optional
-        *argument = NULL;
-        return;
+        return result;
     }
 
     // Convert argument
@@ -126,19 +150,20 @@ void splitCommandNameAndArgument(char *input, char const **commandName, long lon
     unsigned long long arg = strtoull(token, &endptr, 0);
     if (errno == ERANGE) // entered number out of range
     {
-        printf("Argument must be in [0 ; %lld]", LLONG_MAX);
-        *argument = NULL;
+        printf("Argument must be in range [%lld ; %lld]", LLONG_MIN, LLONG_MAX);
     }
     else if (*endptr != '\0') // conversion failed
     {
         printf("Argument is not a number");
-        *argument = NULL;
     }
     else
     {
         // Store argument
-        **argument = arg;
+        result.argument = arg;
+        result.hasArgument = true;
     }
+
+    return result;
 }
 
 size_t getMaxNameLength(Command const commands[], size_t commandCount)
