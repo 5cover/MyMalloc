@@ -19,16 +19,16 @@ void removeAt(Allocation array[], size_t *length, size_t index);
 
 void *customAlloc(size_t size)
 {
-    void *ptr = myAlloc(size);
-    printf("[Allocated %zu bytes at %p]\n", size, ptr);
-    heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
+    void *ptr = malloc(size);
+    //printf("[Allocated %zu bytes at %p]\n", size, ptr);
+    //heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
     return ptr;
 }
 void customFree(void *ptr)
 {
-    myFree(ptr);
-    printf("[Freed %p]\n", ptr);
-    heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
+    free(ptr);
+    //printf("[Freed %p]\n", ptr);
+    //heapDumpChunksBitmap(CHUNKS_DUMP_FILENAME);
 }
 
 int main(void)
@@ -48,29 +48,32 @@ int main(void)
         },
         (Command) {
             .name = "list",
-            .description = "Lists all allocations and chunks.",
+            .description = "List all allocations and chunks.",
             .hasArgument = false,
         },
         (Command) {
             .name = "view",
-            .description = "Opens the system editor for the chunks dump bitmap.",
+            .description = "Open the system editor for the chunks dump bitmap.",
             .hasArgument = false,
         },
-        (Command)
-        {
+        (Command) {
             .name = "data",
-            .description = "Opens the system editor for the date dump bitmap.",
+            .description = "Open the system editor for the date dump bitmap.",
             .hasArgument = false,
         },
-        (Command)
-        {
+        (Command) {
             .name = "help",
-            .description = "Shows this help menu.",
+            .description = "Show this help menu.",
             .hasArgument = false,
-        }, (Command)
-        {
+        },
+        (Command) {
+            .name = "cls",
+            .description = "Clear the screen.",
+            .hasArgument = false,
+        },
+        (Command) {
             .name = "exit",
-            .description = "Exits the program.",
+            .description = "Exit the program.",
             .hasArgument = false,
         },
     };
@@ -137,9 +140,9 @@ int main(void)
         }
         else if (streq(command->name, "list"))
         {
-            printAllocations(allocations, allocationCount);
-            printf("\n");
             heapDumpChunksConsole();
+            printf("\n");
+            printAllocations(allocations, allocationCount);
         }
         else if (streq(command->name, "view"))
         {
@@ -154,6 +157,10 @@ int main(void)
         else if (streq(command->name, "help"))
         {
             showCommandMenu(commands, ARRAYLENGTH(commands));
+        }
+        else if (streq(command->name, "cls"))
+        {
+            system("cls");
         }
         else if (streq(command->name, "exit"))
         {

@@ -17,7 +17,7 @@ typedef struct {
 typedef struct {
     Command const *const array;
     size_t const commandCount;
-    size_t const maxNameLenth;
+    size_t const maxNameLength;
 } CommandArray;
 
 char *allocateString(size_t length);
@@ -32,10 +32,10 @@ Command const *inputCommand(Command const commandsArray[], size_t commandCount, 
     CommandArray const commands = {
         .commandCount = commandCount,
         .array = commandsArray,
-        .maxNameLenth = getMaxNameLength(commandsArray, commandCount),
+        .maxNameLength = getMaxNameLength(commandsArray, commandCount),
     };
 
-    size_t const inputLength = commands.maxNameLenth + digitCount(LLONG_MAX);
+    size_t const inputLength = commands.maxNameLength + 1 + digitCount(LLONG_MAX);
 
     char *const input = allocateString(inputLength);
 
@@ -104,7 +104,7 @@ Command const *getCommandFromName(CommandArray commands, char const *commandName
 {
     foreach(Command const, command, commands.array, commands.commandCount)
     {
-        if (streqn(command->name, commandName, commands.maxNameLenth))
+        if (streqn(command->name, commandName, commands.maxNameLength))
         {
             return command;
         }
