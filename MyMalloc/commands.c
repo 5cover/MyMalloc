@@ -14,27 +14,34 @@ typedef struct {
     bool hasArgument;
 } CommandParseResult;
 
-typedef struct {
-    Command const *const array;
-    size_t const commandCount;
-    size_t const maxNameLength;
-} CommandArray;
-
 char *allocateString(size_t length);
-Command const *getCommandFromName(CommandArray commands, char const *commandName);
-Command const *getCommandFromParsedResult(CommandArray commands, CommandParseResult parsedCommand);
+Command const *getCommandFromName(CommandGroup commands, char const *commandName);
+Command const *getCommandFromParsedResult(CommandGroup commands, CommandParseResult parsedCommand);
 CommandParseResult parseCommand(char *input);
-size_t getMaxNameLength(Command const commands[], size_t commandCount);
 unsigned digitCount(long long n);
 
-Command const *inputCommand(Command const commandsArray[], size_t commandCount, long long *argument)
+CommandGroup createCommandGroup(Command const commands[], size_t count)
 {
-    CommandArray const commands = {
-        .commandCount = commandCount,
-        .array = commandsArray,
-        .maxNameLength = getMaxNameLength(commandsArray, commandCount),
-    };
+    size_t maxNameLength = 0;
 
+    foreach(Command const, command, commands, count)
+    {
+        size_t nameLength = strlen(command->name);
+        if (nameLength > maxNameLength)
+        {
+            maxNameLength = nameLength;
+        }
+    }
+
+    return (CommandGroup) {
+        .array = commands,
+        .count = count,
+        .maxNameLength = maxNameLength
+    };
+}
+
+Command const *inputCommand(CommandGroup commands, long long *argument)
+{
     size_t const inputLength = commands.maxNameLength + 1 + digitCount(LLONG_MAX);
 
     char *const input = allocateString(inputLength);
@@ -67,15 +74,15 @@ Command const *inputCommand(Command const commandsArray[], size_t commandCount, 
     }
 }
 
-void showCommandMenu(Command const commandsArray[], size_t commandCount)
+void showCommandMenu(CommandGroup commands)
 {
-    foreach(Command const, command, commandsArray, commandCount)
+    foreach(Command const, command, commands.array, commands.count)
     {
-        printf("%*s %s\n", -(int)getMaxNameLength(commandsArray, commandCount), command->name, command->description);
+        printf("%*s %s\n", -(int)min(INT_MAX, commands.maxNameLength), command->name, command->description);
     }
 }
 
-Command const *getCommandFromParsedResult(CommandArray commands, CommandParseResult parsedCommand)
+Command const *getCommandFromParsedResult(CommandGroup commands, CommandParseResult parsedCommand)
 {
     Command const *command = getCommandFromName(commands, parsedCommand.name);
 
@@ -100,15 +107,19 @@ Command const *getCommandFromParsedResult(CommandArray commands, CommandParseRes
     return command;
 }
 
-Command const *getCommandFromName(CommandArray commands, char const *commandName)
+Command const *getCommandFromName(CommandGroup commands, char const *commandName)
 {
-    foreach(Command const, command, commands.array, commands.commandCount)
+    if (commandName != NULL)
     {
-        if (streqn(command->name, commandName, commands.maxNameLength))
+        foreach(Command const, command, commands.array, commands.count)
         {
-            return command;
+            if (streqn(command->name, commandName, commands.maxNameLength))
+            {
+                return command;
+            }
         }
     }
+
     return NULL;
 }
 
@@ -164,22 +175,6 @@ CommandParseResult parseCommand(char *input)
     }
 
     return result;
-}
-
-size_t getMaxNameLength(Command const commands[], size_t commandCount)
-{
-    size_t maxNameLength = 0;
-
-    foreach(Command const, command, commands, commandCount)
-    {
-        size_t nameLength = strlen(command->name);
-        if (nameLength > maxNameLength)
-        {
-            maxNameLength = nameLength;
-        }
-    }
-
-    return maxNameLength;
 }
 
 char *allocateString(size_t length)

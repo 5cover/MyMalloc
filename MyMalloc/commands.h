@@ -14,8 +14,16 @@ typedef struct
     bool const hasArgument;
 } Command;
 
-void showCommandMenu(Command const commandsArray[], size_t commandCount);
-Command const *inputCommand(Command const commandsArray[], size_t commandCount, long long *argument);
+typedef struct 
+{
+    Command const *const array;
+    size_t const count;
+    size_t const maxNameLength;
+} CommandGroup;
+
+CommandGroup createCommandGroup(Command const commands[], size_t count);
+void showCommandMenu(CommandGroup commands);
+Command const *inputCommand(CommandGroup commands, long long *argument);
 
 // These functions must be defined by the caller
 void *customAlloc(size_t size);

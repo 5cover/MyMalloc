@@ -8,7 +8,8 @@
 #include "bitmapFactory.h"
 #include "macros.h"
 
-#define DUMP_BMP_HEIGHT 10
+#define DUMP_BMP_HEIGHT 8
+
 #define HEAP_SIZE 256
 #define CHUNKS_LENGTH (HEAP_SIZE / sizeof(void*))
 
@@ -155,7 +156,7 @@ void heapDumpChunksConsole(void)
 
 void heapDumpChunksBitmap(char const *filename)
 {
-    uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL] = { 0 };
+    static uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL] = { 0 };
 
     // Draw the whole bar in green
     for (size_t i = 0; i < HEAP_SIZE; ++i)
@@ -195,7 +196,7 @@ void heapDumpChunksBitmap(char const *filename)
 
 void heapDumpDataBitmap(char const *filename)
 {
-    uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL] = { 0 };
+    static uint8_t image[DUMP_BMP_HEIGHT][HEAP_SIZE][BYTES_PER_PIXEL] = { 0 };
 
     for (size_t i = 0; i < HEAP_SIZE; ++i)
     {

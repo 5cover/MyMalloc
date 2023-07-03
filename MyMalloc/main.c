@@ -35,7 +35,8 @@ int main(void)
 {
     Allocation allocations[100] = { 0 };
     size_t allocationCount = 0;
-    Command const commands[] = {
+
+    Command const commandsArray[] = {
         (Command) {
             .name = "alloc",
             .description = "Allocate an amount of bytes.",
@@ -77,14 +78,15 @@ int main(void)
             .hasArgument = false,
         },
     };
+    CommandGroup const commands = createCommandGroup(commandsArray, ARRAYLENGTH(commandsArray));
 
-    showCommandMenu(commands, ARRAYLENGTH(commands));
+    showCommandMenu(commands);
 
     while (true)
     {
         long long argument = 0;
 
-        const Command *command = inputCommand(commands, ARRAYLENGTH(commands), &argument);
+        const Command *command = inputCommand(commands, &argument);
 
         if (streq(command->name, "alloc"))
         {
@@ -156,7 +158,7 @@ int main(void)
         }
         else if (streq(command->name, "help"))
         {
-            showCommandMenu(commands, ARRAYLENGTH(commands));
+            showCommandMenu(commands);
         }
         else if (streq(command->name, "cls"))
         {
