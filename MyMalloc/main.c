@@ -59,7 +59,7 @@ int main(void)
         },
         (Command) {
             .name = "data",
-            .description = "Open the system editor for the date dump bitmap.",
+            .description = "Open the system editor for the data dump bitmap.",
             .hasArgument = false,
         },
         (Command) {
