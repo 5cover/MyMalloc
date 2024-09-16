@@ -10,12 +10,11 @@
 #define STRLEN(s) (sizeof(s) / sizeof(char) - 1)
 
 /// <summary>Foreach loop construct.</summary>
-#define foreach(type, varName, array, count) for ( \
-    type *varName = array;                         \
-    varName != array + count;                      \
-    ++varName)
+#define foreach(type, varName, array, count)                                   \
+  for (type *varName = array; varName != array + count; ++varName)
 
-/// <summary>Checks if i is a valid index of an array of length length.</summary>
+/// <summary>Checks if i is a valid index of an array of length
+/// length.</summary>
 #define IN_ARRAY_BOUNDS(i, length) (0 <= (i) && (i) < (length))
 
 /// <summary>Determines whether 2 strings are equal using strcmp.</summary>
